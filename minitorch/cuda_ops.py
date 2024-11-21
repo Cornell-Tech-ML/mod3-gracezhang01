@@ -391,26 +391,31 @@ def _mm_practice(out: Storage, a: Storage, b: Storage, size: int) -> None:
     BLOCK_DIM = 32
     # TODO: Implement for Task 3.3.
     # raise NotImplementedError("Need to implement for Task 3.3")
+    # declared shared memory arrays for matrix because shared memory is faster than the global 
+    # this makes sure that all threads in the same block
     shared_a = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
     shared_b = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
 
-    # Get thread indices
-    x = cuda.blockIdx.x * BLOCK_DIM + cuda.threadIdx.x
-    y = cuda.blockIdx.y * BLOCK_DIM + cuda.threadIdx.y
+    # Get thread indices within the block
+    # this represents the position in the output matrix this thread will compute 
+    x = cuda.blockIdx.x * BLOCK_DIM + cuda.threadIdx.x #this corresponds to the row index
+    y = cuda.blockIdx.y * BLOCK_DIM + cuda.threadIdx.y #this corresponds to the column index
 
     # Load data into shared memory
-    if x < size and y < size:
-        shared_a[x, y] = a[x * size + y]
+    if x < size and y < size: #make sure that we only load data that is within the bounds of the matrix
+        #load data from global memory into shared memory 
+        #each thread loads one element of each matrix 
+        shared_a[x, y] = a[x * size + y]  #row major order 
         shared_b[x, y] = b[x * size + y]
 
-    cuda.syncthreads()
+    cuda.syncthreads() #synchronize threads to ensure that all threads have loaded the data
 
-    # Compute matrix multiplication
+    # Compute matrix multiplication only if the thread's position is within the bounds of the output matrix
     if x < size and y < size:
-        acc = 0.0
-        for k in range(size):
+        acc = 0.0 #compute dot product for the given thread
+        for k in range(size): #multiply corresponding elements and sum them up 
             acc += shared_a[x, k] * shared_b[k, y]
-        out[x * size + y] = acc
+        out[x * size + y] = acc #write the result once in the global memory 
 
 
 jit_mm_practice = jit(_mm_practice)
@@ -480,32 +485,32 @@ def _tensor_matrix_multiply(
     #    c) Compute the dot produce for position c[i, j]
     # TODO: Implement for Task 3.4.
     # raise NotImplementedError("Need to implement for Task 3.4")
-    total = 0.0
-    for tile in range(0, a_shape[2], BLOCK_DIM):
+    total = 0.0 #initialize the accumulator for the dot product
+    for tile in range(0, a_shape[2], BLOCK_DIM): #iterate over the tiles along the shared dimension
         # copy tile in to A's shared memory
-        k_a = tile + pj
+        k_a = tile + pj #calculate position in matrix A for the current tile 
         if i < a_shape[1] and k_a < a_shape[2]:
             a_shared[pi, pj] = a_storage[
                 batch * a_batch_stride + i * a_strides[1] + k_a * a_strides[2]
-            ]
+            ] #calculate A's storage position using strides and write to the shared memory: batch offset + row offset + column offset 
         # Load B tile
         k_b = tile + pi
         if j < b_shape[2] and k_b < b_shape[1]:
             b_shared[pi, pj] = b_storage[
                 batch * b_batch_stride + k_b * b_strides[1] + j * b_strides[2]
-            ]
+            ] #calculate b's storage position using strides: batch offset + row offset + col offset and write to the shared memory 
         # Synchronize threads to ensure all tiles are loaded
         cuda.syncthreads()
-        # Compute partial dot product
+        # Compute partial dot product for the current tile 
         for bd in range(BLOCK_DIM):
-            if (tile + bd) < a_shape[2]:
-                total += a_shared[pi, bd] * b_shared[bd, pj]  # compute the dot product
+            if (tile + bd) < a_shape[2]: #check if we are within the dimension bounds 
+                total += a_shared[pi, bd] * b_shared[bd, pj]  # compute the dot product, multiple and accumulate from shared memory
         # ensure a completed computation before loading the next tile
         cuda.syncthreads()
-    # Write result to the output matrix
+    # Write result to the global memory if we are within the bounds of the output matrix
     if i < out_shape[1] and j < out_shape[2]:
-        loc = batch * out_strides[0] + i * out_strides[1] + j * out_strides[2]
-        out[loc] = total
+        loc = batch * out_strides[0] + i * out_strides[1] + j * out_strides[2] #calculate the global memory position using strides: batch offset + row offset + col offset 
+        out[loc] = total #write the result to the output matrix / global memory 
 
 
 tensor_matrix_multiply = jit(_tensor_matrix_multiply)
