@@ -3,6 +3,7 @@ import random
 import numba
 
 import minitorch
+import time
 
 datasets = minitorch.datasets
 FastTensorBackend = minitorch.TensorBackend(minitorch.FastOps)
@@ -73,6 +74,7 @@ class FastTrain:
 
         for epoch in range(max_epochs):
             total_loss = 0.0
+            start_time = time.time()
             c = list(zip(data.X, data.y))
             random.shuffle(c)
             X_shuf, y_shuf = zip(*c)
