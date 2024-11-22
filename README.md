@@ -377,7 +377,6 @@ Size: 1024
 **Hyperparameters for all models:**
 -Learning Rate: 0.05
 -Hidden Layers: 100 or 250 (only for simple dataset)
--Epochs: 290
 ### Simple Dataset
 For simple dataset, I trained two models: one model with 100 hidden layers and one with 250 hidden layers.
 **CPU Simple w/ hidden layers = 100:**
